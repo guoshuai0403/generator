@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<!-- 
+         符号转义说明
+    &lt;          < 
+    &gt;          >  
+    &lt;&gt;     <>
+    &amp;        & 
+    &apos;       '
+    &quot;       "
+  <![CDATA[ 这里写你的SQL或者符号 ]]> 
+ -->
+<!-- 数据库操作 -->
+<mapper namespace="dbMapper" >
+
+	<!-- mysql查询所有表、视图 -->
+	<select id="MYSQL_tables" resultType="com.guo.bean.TableBean" parameterType="com.guo.bean.TableBean">
+		SELECT
+			TABLE_NAME as name,
+			TABLE_COMMENT as comment,
+			CASE TABLE_TYPE WHEN 'BASE TABLE' THEN 0 WHEN 'VIEW' THEN 1 END AS type
+		FROM
+			information_schema.TABLES
+		WHERE
+			table_schema = #{dataBase.name}
+		<if test="name != null and name != ''">
+			and (table_name like '%${name}%' or table_comment like '%${name}%')
+		</if>
+	</select>
+
+	<!--1. 如果Key是空的, 那么该列值的可以重复, 表示该列没有索引, 或者是一个非唯一的复合索引的非前导列-->
+	<!--2. 如果Key是PRI,  那么该列是主键的组成部分-->
+	<!--3. 如果Key是UNI,  那么该列是一个唯一值索引的第一列(前导列),并别不能含有空值(NULL)-->
+	<!--4. 如果Key是MUL,  那么该列的值可以重复, 该列是一个非唯一索引的前导列(第一列)或者是一个唯一性索引的组成部分但……-->
+	<!-- mysql查询列信息 -->
+	<select id="MYSQL_columns" resultType="com.guo.bean.ColumnBean" parameterType="com.guo.bean.TableBean">
+		SELECT
+			'MYSQL' type,
+			TABLE_NAME AS tableName,
+			COLUMN_NAME AS name,
+			DATA_TYPE AS columnType,
+			CHARACTER_MAXIMUM_LENGTH AS length,
+			COLUMN_COMMENT AS comment,
+			CASE COLUMN_KEY WHEN 'PRI' THEN 1 WHEN 'MUL' THEN 2 END AS type
+		FROM
+			information_schema.COLUMNS
+		WHERE
+			table_schema = #{dataBase.name}
+		AND TABLE_NAME = #{name}
+	</select>
+
+	<!-- ORACLE查询所有表、视图 -->
+	<select id="ORACLE_tables" resultType="com.guo.bean.TableBean" parameterType="Map">
+		select
+			table_name as "tablename",
+			table_type as "tabletype",
+			comments as "tablecomment"
+		from user_tab_comments
+		where 1=1
+		<if test="seachInfo != null and seachInfo != ''">
+			and (table_name like '%${name}%' or comments like '%${name}%')
+		</if>
+	</select>
+
+	<!-- ORACLE查询列信息 -->
+	<select id="ORACLE_columns" resultType="com.guo.bean.ColumnBean" parameterType="Map">
+		SELECT
+			'ORACLE' dialect,
+			utc.table_name AS tablename,
+			utc.column_name AS columnname,
+			utc.data_type AS datatype,
+			utc.data_length AS cml,
+			ucc.comments AS columncomment,
+			case ucon.constraint_type when 'P' then '1' when 'R' then '2' else '' end as columnkey
+		FROM
+			user_tab_columns utc
+		LEFT JOIN user_col_comments ucc ON ucc.column_name = utc.column_name
+		AND UCC.table_name = UTC.table_name
+		LEFT JOIN (
+			SELECT
+				cu.*, au.constraint_type
+			FROM
+				user_cons_columns cu,
+				user_constraints au
+			WHERE
+				cu.constraint_name = au.constraint_name
+			AND au.constraint_type IN('P','R')
+		) ucon ON ucon.table_name = utc.table_name
+		AND ucon.column_name = utc.column_name
+		WHERE
+			UTC.Table_Name = #{name}
+			order by utc.COLUMN_ID
+	</select>
+</mapper>
